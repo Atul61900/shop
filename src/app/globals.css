@@ -1,26 +1,483 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ==========================================================================
+   KMRC SERVICE CENTER — Design tokens
+   Ported verbatim from the Stitch project (12078678508504410951)
+   design system: "Williams GP Tech Aesthetic"
+   ========================================================================== */
+
+@theme {
+  /* ---- Surfaces & depth tiers ------------------------------------------ */
+  --color-surface-deep: #020408;
+  --color-surface-base: #05070b;
+  --color-surface-card: #0b0f17;
+  --color-surface-card-hover: #111827;
+  --color-surface: #111318;
+  --color-surface-dim: #111318;
+  --color-surface-bright: #37393e;
+  --color-surface-variant: #32353a;
+  --color-surface-container-lowest: #0c0e13;
+  --color-surface-container-low: #191c20;
+  --color-surface-container: #1d2024;
+  --color-surface-container-high: #272a2f;
+  --color-surface-container-highest: #32353a;
+
+  /* ---- Brand accents ---------------------------------------------------- */
+  --color-primary-container: #0052ff;
+  --color-secondary-container: #0161f6;
+  --color-tertiary: #00daf3;
+  --color-tertiary-container: #00717e;
+  --color-tertiary-fixed: #9cf0ff;
+  --color-tertiary-fixed-dim: #00daf3;
+  --color-primary: #b7c4ff;
+  --color-primary-fixed: #dde1ff;
+  --color-primary-fixed-dim: #b7c4ff;
+  --color-secondary: #b3c5ff;
+  --color-secondary-fixed-dim: #b3c5ff;
+  --color-inverse-primary: #004ced;
+  --color-surface-tint: #b7c4ff;
+
+  /* ---- On-* foreground pairings ---------------------------------------- */
+  --color-on-primary: #002682;
+  --color-on-primary-container: #dfe3ff;
+  --color-on-secondary-container: #edefff;
+  --color-on-tertiary: #00363d;
+  --color-on-tertiary-container: #a7f1ff;
+  --color-on-surface: #e1e2e9;
+  --color-on-surface-variant: #c3c5d9;
+  --color-inverse-surface: #e1e2e9;
+  --color-inverse-on-surface: #2e3035;
+
+  /* ---- Typography colours ---------------------------------------------- */
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+
+  /* ---- Borders & glows -------------------------------------------------- */
+  --color-border-subtle: rgb(255 255 255 / 0.08);
+  --color-border-strong: rgb(255 255 255 / 0.15);
+  --color-border-active: #0052ff;
+  --color-glow-blue: rgb(0 82 255 / 0.25);
+  --color-outline: #8d90a2;
+  --color-outline-variant: #434656;
+
+  /* ---- Status ----------------------------------------------------------- */
+  --color-error: #ffb4ab;
+  --color-error-container: #93000a;
+  --color-on-error: #690005;
+  --color-on-error-container: #ffdad6;
+
+  /* ---- Typographic scale ------------------------------------------------ */
+  --font-display-hero: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display-hero-mobile: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg-mobile: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-md: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-sm: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-label-metric: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-label-tag: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-label-button: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body-lg: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body-md: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body-sm: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --text-display-hero: 56px;
+  --text-display-hero--line-height: 64px;
+  --text-display-hero--letter-spacing: -0.03em;
+  --text-display-hero--font-weight: 600;
+
+  --text-display-hero-mobile: 36px;
+  --text-display-hero-mobile--line-height: 44px;
+  --text-display-hero-mobile--letter-spacing: -0.02em;
+  --text-display-hero-mobile--font-weight: 600;
+
+  --text-headline-lg: 40px;
+  --text-headline-lg--line-height: 48px;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 500;
+
+  --text-headline-lg-mobile: 28px;
+  --text-headline-lg-mobile--line-height: 36px;
+  --text-headline-lg-mobile--letter-spacing: -0.01em;
+  --text-headline-lg-mobile--font-weight: 500;
+
+  --text-headline-md: 28px;
+  --text-headline-md--line-height: 36px;
+  --text-headline-md--letter-spacing: -0.01em;
+  --text-headline-md--font-weight: 500;
+
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--letter-spacing: 0;
+  --text-headline-sm--font-weight: 500;
+
+  --text-label-metric: 48px;
+  --text-label-metric--line-height: 52px;
+  --text-label-metric--letter-spacing: -0.02em;
+  --text-label-metric--font-weight: 700;
+
+  --text-label-tag: 11px;
+  --text-label-tag--line-height: 14px;
+  --text-label-tag--letter-spacing: 0.08em;
+  --text-label-tag--font-weight: 600;
+
+  --text-label-button: 13px;
+  --text-label-button--line-height: 16px;
+  --text-label-button--letter-spacing: 0.02em;
+  --text-label-button--font-weight: 600;
+
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 28px;
+  --text-body-lg--letter-spacing: -0.01em;
+  --text-body-lg--font-weight: 400;
+
+  --text-body-md: 15px;
+  --text-body-md--line-height: 24px;
+  --text-body-md--letter-spacing: 0;
+  --text-body-md--font-weight: 400;
+
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 20px;
+  --text-body-sm--letter-spacing: 0;
+  --text-body-sm--font-weight: 400;
+
+  /* ---- Spacing scale (engineering cadence) ------------------------------ */
+  --spacing-space-xs: 0.25rem;
+  --spacing-space-sm: 0.5rem;
+  --spacing-space-md: 1rem;
+  --spacing-space-lg: 1.5rem;
+  --spacing-space-xl: 2.5rem;
+  --spacing-space-2xl: 4rem;
+  --spacing-gutter: 1.5rem;
+  --spacing-gutter-mobile: 1rem;
+  --spacing-margin: 4rem;
+  --spacing-margin-mobile: 1.25rem;
+
+  /* ---- Shape: strictly sharp 90-degree angles --------------------------- */
+  --radius-DEFAULT: 0rem;
+  --radius-xs: 0rem;
+  --radius-sm: 0rem;
+  --radius-md: 0rem;
+  --radius-lg: 0rem;
+  --radius-xl: 0rem;
+  --radius-2xl: 0rem;
+  --radius-3xl: 0rem;
+  --radius-pill: 9999px;
+
+  /* ---- Elevation: outlines + technical emissive glows, no heavy shadows - */
+  --shadow-glow: 0 0 24px -4px rgb(0 82 255 / 0.4);
+  --shadow-glow-strong: 0 0 32px -2px rgb(0 82 255 / 0.55);
+  --shadow-glow-sm: 0 0 12px rgb(0 82 255 / 0.25);
+  --shadow-glow-tertiary: 0 0 20px -4px rgb(0 218 243 / 0.45);
+  --shadow-panel: 0 24px 48px -12px rgb(0 0 0 / 0.7);
+  --shadow-panel-lg: 0 32px 80px -16px rgb(0 0 0 / 0.85);
+
+  /* ---- Motion ------------------------------------------------------------ */
+  --ease-tech: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-snap: cubic-bezier(0.32, 0.72, 0, 1);
+
+  --animate-pulse-dot: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-scan: scan 3.2s linear infinite;
+  --animate-sweep: sweep 5s linear infinite;
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  /* Headline shine. Paired with `background-size: 200%` and a highlight at the
+     gradient midpoint, so 100% -> 0% carries it from the first character to
+     the last. Self-contained on purpose: a var() here would not be emitted by
+     Tailwind and would silently kill the animation. */
+  --animate-text-sweep: text-sweep 7s linear infinite;
+  --animate-tick: tick 1s steps(2, end) infinite;
+  --animate-spin-slow: spin 14s linear infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(0 218 243 / 0.5);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 5px rgb(0 218 243 / 0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(400%);
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  60%,
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -180% 0;
+  }
+  100% {
+    background-position: 180% 0;
+  }
+}
+
+@keyframes word-rise {
+  from {
+    transform: translateY(112%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes text-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+@keyframes tick {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.35;
+  }
+}
+
+/* ==========================================================================
+   Base layer
+   ========================================================================== */
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-border-subtle);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-surface-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-body-md);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+
+  /* Crystalline card header depth */
+  .surface-sheen {
+    background-image: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.02) 0%,
+      rgb(255 255 255 / 0) 100%
+    );
+  }
+
+  /* Technical grid overlay */
+  .bg-tech-grid {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.06) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .bg-tech-grid-blue {
+    background-image:
+      linear-gradient(to right, rgb(0 82 255 / 0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(0 82 255 / 0.1) 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
+
+  ::selection {
+    background-color: var(--color-primary-container);
+    color: #fff;
+  }
+
+  /* Sharp, engineered focus ring */
+  :focus-visible {
+    outline: 2px solid var(--color-primary-container);
+    outline-offset: 2px;
+  }
+
+  /* Scrollbar — thin telemetry style */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-surface-deep);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-surface-container-highest);
+    border: 2px solid var(--color-surface-deep);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-active);
+  }
+
+  /* Native select dropdowns inherit the dark scheme */
+  select option {
+    background-color: var(--color-surface-card);
+    color: var(--color-text-primary);
+  }
+
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+/* ==========================================================================
+   Component utilities
+   ========================================================================== */
+
+@layer components {
+  /* ==========================================================================
+     Headline word mask
+
+     Each word rises from behind an invisible edge. Driven by plain CSS rather
+     than JS so it paints on the first frame instead of waiting for hydration
+     and IntersectionObserver — the text is never blank on reload. Per-word
+     timing is passed in as an inline animation-delay.
+     ========================================================================== */
+  .word-mask {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: bottom;
+    /* Room for descenders (e.g. the "y" in "Stay") so the mask never clips them */
+    padding-bottom: 0.14em;
+    margin-bottom: -0.14em;
+  }
+
+  .word-mask__word {
+    display: inline-block;
+    /* Bezier is inlined, not var(--ease-tech): Tailwind only emits unused
+       theme vars, so that reference resolves to nothing and kills the whole
+       `animation` shorthand. `backwards` + no static transform means the word
+       rests visible, so the text can never get stuck hidden. */
+    animation: word-rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+
+  /* Chamfered technical tag — permitted 4px clip-path cut corner */
+  .chamfer {
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  }
+
+  .chamfer-tr {
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+  }
+
+  .skeleton {
+    background-image: linear-gradient(
+      90deg,
+      var(--color-surface-card) 0%,
+      var(--color-surface-card-hover) 50%,
+      var(--color-surface-card) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Underline that wipes in from the left on hover */
+  .link-wipe {
+    position: relative;
+  }
+  .link-wipe::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 1px;
+    width: 100%;
+    background-color: var(--color-border-active);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s var(--ease-tech);
+  }
+  .link-wipe:hover::after,
+  .link-wipe[data-active="true"]::after {
+    transform: scaleX(1);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* Hides content visually while keeping it for screen readers */
+  .sr-only-focusable:not(:focus):not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
+
+/* ==========================================================================
+   Reduced motion — honour the OS setting
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

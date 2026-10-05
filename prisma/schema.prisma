@@ -1,0 +1,377 @@
+// KMRC — data layer
+// Datasource is SQLite for zero-config local development.
+// To move to Postgres for production: change provider to "postgresql",
+// point DATABASE_URL at your instance, and run `prisma migrate deploy`.
+// No schema changes are required — every column below is portable.
+
+// Prisma 7: the connection URL lives in prisma.config.ts (for migrations) and
+// is handed to PrismaClient through a driver adapter (see src/lib/prisma.ts).
+// No `url` property on the datasource block.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  avatarUrl     String?
+  role          String    @default("CUSTOMER") // CUSTOMER | STAFF | ADMIN
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  reviews       Review[]
+  cartItems     CartItem[]
+  wishlistItems WishlistItem[]
+  sessions      Session[]
+  tokens        VerificationToken[]
+  subscribers   Subscriber[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Opaque, single-use tokens for password reset + email verification.
+model VerificationToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  purpose   String // RESET_PASSWORD | VERIFY_EMAIL
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, purpose])
+}
+
+model Address {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label       String   @default("Home")
+  contactName String
+  phone       String
+  line1       String
+  line2       String?
+  city        String
+  province    String
+  postalCode  String?
+  landmark    String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  orders Order[]
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  tagline     String?
+  description String?
+  image       String?
+  accent      String    @default("#0052FF")
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  products Product[]
+
+  @@index([slug])
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  sku             String   @unique
+  name            String
+  summary         String
+  description     String
+  /// Integer minor units (paisa) — never a float.
+  price           Int
+  compareAtPrice  Int?
+  costPrice       Int?
+  stock           Int      @default(0)
+  lowStockAt      Int      @default(5)
+  brand           String
+  categoryId      String
+  category        Category @relation(fields: [categoryId], references: [id])
+  /// JSON array of image paths
+  images          String   @default("[]")
+  /// JSON object of { label: value } technical specs
+  specs           String   @default("{}")
+  warrantyMonths  Int      @default(12)
+  condition       String   @default("NEW")
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0)
+  soldCount       Int      @default(0)
+  isActive        Boolean  @default(true)
+  isFeatured      Boolean  @default(false)
+  isNew           Boolean  @default(true)
+  tags            String   @default("[]")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  orderItems   OrderItem[]
+  reviews      Review[]
+  cartItems    CartItem[]
+  wishlist     WishlistItem[]
+
+  @@index([categoryId])
+  @@index([isActive, isFeatured])
+  @@index([brand])
+}
+
+model Service {
+  id               String   @id @default(cuid())
+  slug             String   @unique
+  name             String
+  eyebrow          String
+  summary          String
+  description      String
+  /// Integer minor units
+  basePrice        Int
+  /// Typical turnaround in minutes
+  turnaroundMinutes Int
+  image            String?
+  /// JSON array of bullet points
+  features         String   @default("[]")
+  /// JSON array of device families this applies to
+  deviceSupport    String   @default("[]")
+  /// JSON array of common symptoms
+  symptoms         String   @default("[]")
+  icon             String   @default("memory")
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  warrantyDays     Int      @default(90)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([slug])
+}
+
+// ---------------------------------------------------------------------------
+// Cart & wishlist
+// ---------------------------------------------------------------------------
+
+model CartItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+model WishlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Commerce
+// ---------------------------------------------------------------------------
+
+model Order {
+  id            String    @id @default(cuid())
+  orderNumber   String    @unique
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  email         String
+  phone         String
+  status        String    @default("PENDING") // PENDING|CONFIRMED|PROCESSING|READY|OUT_FOR_DELIVERY|DELIVERED|CANCELLED|REFUNDED
+  paymentMethod String    @default("COD") // COD|ESEWA|KHALTI
+  paymentStatus String    @default("PENDING") // PENDING|PAID|FAILED|REFUNDED
+  paymentRef    String?
+  subtotal      Int
+  shippingFee   Int       @default(0)
+  discount      Int       @default(0)
+  total         Int
+  couponCode    String?
+  /// JSON snapshot of the delivery address
+  shippingAddress String
+  deliveryNote  String?
+  courierName   String?
+  trackingRef   String?
+  placedAt      DateTime  @default(now())
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items      OrderItem[]
+  address    Address?   @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  addressId  String?
+  payments   Payment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([email])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// Name/price are snapshotted so historical orders survive catalogue edits.
+  name      String
+  sku       String
+  image     String?
+  /// Unit price in minor units at time of purchase
+  unitPrice Int
+  quantity  Int
+  lineTotal Int
+
+  @@index([orderId])
+}
+
+/// Records every payment attempt so gateway callbacks can be reconciled.
+model Payment {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  gateway     String // ESEWA | KHALTI
+  amount      Int
+  /// Gateway transaction identifier
+  reference   String?
+  status      String   @default("INITIATED") // INITIATED|SUCCESS|FAILED
+  /// Raw gateway payload for audit
+  rawResponse String   @default("{}")
+  createdAt   DateTime @default(now())
+  verifiedAt  DateTime?
+
+  @@index([orderId])
+  @@index([reference])
+}
+
+model Coupon {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  kind           String   @default("PERCENT") // PERCENT | FIXED
+  value          Int // percent 0-100, or minor units for FIXED
+  minOrderAmount Int      @default(0)
+  maxDiscount    Int?
+  usageLimit     Int?
+  usedCount      Int      @default(0)
+  startsAt       DateTime @default(now())
+  expiresAt      DateTime?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([code, isActive])
+}
+
+// ---------------------------------------------------------------------------
+// Engagement
+// ---------------------------------------------------------------------------
+
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName String
+  rating     Int
+  title      String?
+  body       String
+  /// Customer said they verified the purchase
+  isVerifiedBuyer Boolean @default(false)
+  isApproved Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([productId, isApproved])
+  @@index([userId])
+}
+
+model ContactMessage {
+  id        String    @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([isRead])
+}
+
+model Subscriber {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isActive  Boolean   @default(true)
+  source    String    @default("footer")
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+}
+
+/// Append-only record of catalogue changes made through the staff area.
+///
+/// This is the answer to "only the admin should be able to do this" — if the
+/// staff area is ever compromised there is a timestamped trail of which
+/// account created, changed or removed what.
+model AdminAuditLog {
+  id     String @id @default(cuid())
+  /// Email rather than a foreign key: the trail must survive account deletion.
+  actor  String
+  /// PRODUCT_CREATED | PRODUCT_DELETED | SERVICE_CREATED | SERVICE_DELETED | IMAGE_UPLOADED
+  action String
+  /// Slug or public path the action applied to.
+  target String
+  detail String?
+  ip     String?
+  at     DateTime @default(now())
+
+  @@index([actor])
+  @@index([at])
+}
