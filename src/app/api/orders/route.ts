@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
     if (lines.length === 0) return fail("Your cart is empty.");
 
-    // The payment method is never gated here: all three methods are always
+    // The payment method is never gated here: both methods are always
     // selectable, and gateway readiness (TEST credentials present, LIVE keys
     // issued) is enforced when payment is *initiated*, where the backend can
     // return a clear configuration error. Blocking here would silently
