@@ -4,8 +4,6 @@ import { priceCart } from "@/lib/cart";
 import { generateReference } from "@/lib/utils";
 import { siteConfig } from "@/lib/config";
 import { sendOrderConfirmationEmail } from "@/lib/mail";
-import { isEsewaConfigured } from "@/lib/payments/esewa";
-import { isKhaltiConfigured } from "@/lib/payments/khalti";
 import { checkoutSchema, fieldErrors } from "@/lib/validation";
 import { parseCartLines } from "@/lib/schemas";
 import { clientIp, fail, guarded, ok, rateLimit, readJson } from "@/lib/api";
@@ -41,17 +39,11 @@ export async function POST(request: Request) {
 
     if (lines.length === 0) return fail("Your cart is empty.");
 
-    // A gateway we cannot actually reach must never be selectable.
-    if (input.paymentMethod === "ESEWA" && !isEsewaConfigured()) {
-      return fail("eSewa is not available right now. Please choose another payment method.", 422, {
-        paymentMethod: "eSewa is not configured",
-      });
-    }
-    if (input.paymentMethod === "KHALTI" && !isKhaltiConfigured()) {
-      return fail("Khalti is not available right now. Please choose another payment method.", 422, {
-        paymentMethod: "Khalti is not configured",
-      });
-    }
+    // The payment method is never gated here: all three methods are always
+    // selectable, and gateway readiness (TEST credentials present, LIVE keys
+    // issued) is enforced when payment is *initiated*, where the backend can
+    // return a clear configuration error. Blocking here would silently
+    // un-select a method the UI correctly offered.
 
     const user = await getCurrentUser();
     const insideRingRoad = /kathmandu|lalitpur|bhaktapur|kirtipur|tripureshwor|thamel/i.test(
@@ -85,10 +77,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const orderNumber = generateReference("KM");
+    // Order numbers are random, so two simultaneous checkouts can rarely
+    // collide on the unique constraint. The whole transaction rolls back on
+    // failure, so regenerating and retrying is safe. After a few attempts
+    // something else is wrong and the guarded wrapper reports it.
+    let orderNumber = generateReference("KM");
     const shippingAddress = JSON.stringify(input.shippingAddress);
 
-    const order = await prisma.$transaction(async (tx) => {
+    const placeOrder = (orderNumber: string) =>
+      prisma.$transaction(async (tx) => {
       // Conditional update = the concurrency guard. `updateMany` only touches
       // rows still matching `stock >= quantity`, so the loser of a race gets
       // count 0 and the whole transaction rolls back.
@@ -161,13 +158,34 @@ export async function POST(request: Request) {
       }
 
       return created;
-    }).catch((err: unknown) => {
-      if (err instanceof Error && err.message.startsWith("INSUFFICIENT_STOCK:")) {
-        const slug = err.message.split(":")[1];
-        return { stockError: slug } as const;
+      }).catch((err: unknown) => {
+        if (err instanceof Error && err.message.startsWith("INSUFFICIENT_STOCK:")) {
+          const slug = err.message.split(":")[1];
+          return { stockError: slug } as const;
+        }
+        throw err;
+      });
+
+    // Retries a regenerated number on the rare unique collision. The stock
+    // guard above throws INSUFFICIENT_STOCK (not P2002), so a retry never
+    // double-decrements: the rolled-back attempt reserved nothing.
+    let order: Awaited<ReturnType<typeof placeOrder>> | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        order = await placeOrder(orderNumber);
+        break;
+      } catch (err) {
+        const clash =
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          (err as { code?: string }).code === "P2002";
+        if (!clash || attempt === 2) throw err;
+        orderNumber = generateReference("KM");
       }
-      throw err;
-    });
+    }
+    // The loop either breaks with an order or throws on the final attempt.
+    if (!order) throw new Error("Order placement failed unexpectedly.");
 
     if ("stockError" in order) {
       return fail(

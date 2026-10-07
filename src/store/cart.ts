@@ -73,8 +73,10 @@ type CartState = {
   add: (productId: string, quantity?: number) => void;
   setQuantity: (productId: string, quantity: number) => void;
   remove: (productId: string) => void;
+  removeMany: (productIds: string[]) => void;
   clear: () => void;
   setCart: (cart: PricedCart) => void;
+  setPricing: (isPricing: boolean) => void;
   setCoupon: (code: string | null) => void;
   openDrawer: () => void;
   closeDrawer: () => void;
@@ -128,9 +130,20 @@ export const useCartStore = create<CartState>()(
           revision: state.revision + 1,
         })),
 
+      /** Drops several lines at once (used when pricing reports dead products). */
+      removeMany: (productIds) =>
+        set((state) => {
+          if (productIds.length === 0) return state;
+          const doomed = new Set(productIds);
+          const lines = state.lines.filter((l) => !doomed.has(l.productId));
+          if (lines.length === state.lines.length) return state;
+          return { lines, revision: state.revision + 1 };
+        }),
+
       clear: () => set((state) => ({ lines: [], revision: state.revision + 1 })),
 
       setCart: (cart) => set({ cart }),
+      setPricing: (isPricing) => set({ isPricing }),
       setCoupon: (couponCode) => set((state) => ({ couponCode, revision: state.revision + 1 })),
       openDrawer: () => set({ isDrawerOpen: true }),
       closeDrawer: () => set({ isDrawerOpen: false }),

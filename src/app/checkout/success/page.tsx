@@ -30,7 +30,7 @@ export default async function SuccessPage({
 }: {
   searchParams: Promise<{ order?: string; gateway?: string; paid?: string; reason?: string }>;
 }) {
-  const { order: orderNumber, gateway, paid, reason } = await searchParams;
+  const { order: orderNumber, paid, reason } = await searchParams;
 
   if (!orderNumber) notFound();
 
@@ -48,16 +48,16 @@ export default async function SuccessPage({
     address = {};
   }
 
-  // If a gateway returned without our callback landing, reconcile here so the
-  // customer is never shown a stale "unpaid" state.
+  // If a gateway returned without our handler landing, reconcile here so the
+  // customer is never shown a stale "unpaid" state. This runs the same
+  // settle path as the return handlers — verification included.
   const needsReconcile =
     order.paymentStatus !== "PAID" &&
     order.paymentMethod !== "COD" &&
-    gateway === "khalti" &&
     paid !== "0";
 
   if (needsReconcile) {
-    await reconcileKhalti(order.id, order.orderNumber);
+    await reconcilePayment(order.id, order.orderNumber, order.paymentMethod);
   }
 
   const refreshed = await prisma.order.findUnique({ where: { id: order.id } });
@@ -130,6 +130,16 @@ export default async function SuccessPage({
             </span>
           </div>
         </div>
+
+        {process.env.NODE_ENV !== "production" && !isCod ? (
+          <DevPaymentPanel
+            orderNumber={order.orderNumber}
+            gateway="eSewa"
+            paymentStatus={paymentStatus}
+            txn={order.payments[0]?.txnUuid ?? null}
+            verified={isPaid}
+          />
+        ) : null}
 
         {/* ---- Reference ---- */}
         <div className="mt-10 border border-border-subtle bg-surface-card">
@@ -317,33 +327,64 @@ function TotalRow({ label, value, tone }: { label: string; value: string; tone?:
 }
 
 /**
- * Last-chance reconciliation when the gateway callback never reached us
- * (ad-blockers, dropped redirects). Verified server-side against Khalti.
+/**
+ * Development-only payment readout.
+ *
+ * Server-rendered and stripped from production builds by the NODE_ENV check at
+ * the call site, so this can never leak into a live page. Shows state, never
+ * secrets: no keys, no signatures, no tokens.
  */
-async function reconcileKhalti(orderId: string, orderNumber: string) {
+function DevPaymentPanel({
+  orderNumber,
+  gateway,
+  paymentStatus,
+  txn,
+  verified,
+}: {
+  orderNumber: string;
+  gateway: string;
+  paymentStatus: string;
+  txn: string | null;
+  verified: boolean;
+}) {
+  return (
+    <div className="mx-auto mt-8 w-full max-w-3xl border border-amber-500/40 bg-amber-500/5 p-5 text-left">
+      <p className="font-label-tag text-label-tag uppercase tracking-widest text-amber-300">
+        🧪 Dev payment state — not shown in production
+      </p>
+      <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 font-body-sm text-body-sm sm:grid-cols-3">
+        {[
+          ["Gateway", gateway],
+          ["Order", orderNumber],
+          ["Payment", paymentStatus],
+          ["Transaction", txn ?? "—"],
+          ["Verification", verified ? "VERIFIED" : "NOT VERIFIED"],
+        ].map(([term, value]) => (
+          <div key={term} className="flex flex-col gap-0.5">
+            <dt className="font-label-tag text-[10px] uppercase tracking-widest text-text-muted">
+              {term}
+            </dt>
+            <dd className="truncate font-mono text-[12px] text-text-primary">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/**
+ * Last-chance reconciliation when the gateway return never reached us
+ * (ad-blockers, dropped redirects, closed tabs). Runs the same settle logic
+ * as the return handlers — verification and idempotency included.
+ */
+async function reconcilePayment(orderId: string, orderNumber: string, method: string) {
   try {
-    const { isKhaltiConfigured, verifyKhaltiPayment } = await import("@/lib/payments/khalti");
-    if (!isKhaltiConfigured()) return;
-
-    const payment = await prisma.payment.findFirst({
-      where: { orderId, gateway: "KHALTI" },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!payment?.reference) return;
-
-    const verified = await verifyKhaltiPayment(payment.reference);
-    if (!verified.ok) return;
-
-    await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: "PAID",
-        paymentRef: verified.token,
-        status: "CONFIRMED",
-      },
-    });
+    if (method === "ESEWA") {
+      const { settleEsewaReturn } = await import("@/lib/payments/settle-esewa");
+      await settleEsewaReturn({ orderNumber });
+    }
   } catch (err) {
     // Never let reconciliation break the page — the customer can retry.
-    console.error("[checkout] khalti reconcile failed:", err, orderNumber);
+    console.error("[checkout] reconcile failed:", err, orderNumber);
   }
 }

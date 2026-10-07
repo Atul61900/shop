@@ -52,7 +52,7 @@ export default function PrivacyPage() {
           </p>
           <List
             items={[
-              "Our payment gateway (eSewa or Khalti) for online payments — we never see or store your card details.",
+              "Our payment gateway (eSewa) for online payments — we never see or store your card details.",
               "Our delivery rider, who receives just the name, phone number and address needed to hand the parcel over.",
               "Our email provider, if you have asked to receive messages from us.",
             ]}

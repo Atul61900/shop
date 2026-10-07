@@ -4,6 +4,7 @@ import "./globals.css";
 import { inter, spaceGrotesk } from "./fonts";
 import { siteConfig } from "@/lib/config";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -62,6 +63,17 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await getCurrentUser();
 
+  /**
+   * The footer matrix is read live rather than hardcoded, because services are
+   * created and removed from the admin panel. A static list went stale the
+   * moment a service was deleted and left the footer linking to 404s.
+   */
+  const footerServices = await prisma.service.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+    select: { slug: true, name: true },
+  });
+
   return (
     <html
       lang="en"
@@ -99,7 +111,13 @@ export default async function RootLayout({
               {children}
             </main>
 
-            <Footer />
+            <Footer
+            serviceLinks={footerServices.map((service, i) => ({
+              href: `/services/${service.slug}`,
+              label: service.name,
+              index: String(i + 1).padStart(2, "0"),
+            }))}
+          />
           </div>
 
           <CartDrawer />

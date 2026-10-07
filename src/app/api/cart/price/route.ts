@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { priceCart } from "@/lib/cart";
 import { parseCartLines } from "@/lib/schemas";
-import { guarded, ok, readJson } from "@/lib/api";
+import { guarded, ok, rateLimit, clientIp, fail, readJson } from "@/lib/api";
 
 /**
  * POST /api/cart/price
@@ -14,6 +14,14 @@ import { guarded, ok, readJson } from "@/lib/api";
  */
 export async function POST(request: Request) {
   return guarded(async () => {
+    // Pricing runs a DB query per call; bound it generously so normal
+    // shopping (debounced client-side) never notices. The client keeps the
+    // last good pricing on 429.
+    const limit = rateLimit(`cart-price:${clientIp(request)}`, 240, 60 * 60 * 1000);
+    if (!limit.allowed) {
+      return fail("Too many requests. Please wait a moment and try again.", 429);
+    }
+
     const body = await readJson<{
       lines?: unknown;
       couponCode?: string | null;

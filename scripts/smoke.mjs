@@ -25,6 +25,7 @@ const PAGES = [
   ["/reset-password?token=abc", 200],
   ["/account", 307],
   ["/admin", 307],
+  ["/admin/orders", 307],
   ["/faq", 200],
   ["/privacy", 200],
   ["/terms", 200],
@@ -206,6 +207,11 @@ console.log("\n── API: ADMIN CLOSED TO NON-STAFF ─────────
 await post("admin product create anonymously", "/api/admin/products", {}, 401);
 await post("admin service create anonymously", "/api/admin/services", {}, 401);
 await post("admin upload anonymously", "/api/admin/upload", {}, 401);
+await check("admin order update anonymously", "/api/admin/orders/does-not-exist", 401, {
+  method: "PATCH",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ status: "PROCESSING" }),
+});
 
 {
   // The upload endpoint is create-only — there is no DELETE by design.
@@ -255,6 +261,13 @@ if (adminCookie) {
     console.log(`       -> delete controls rendered: ${html.includes("Delete Screen Repair")}`);
     console.log(`       -> edit controls rendered: ${html.includes("Edit 65W GaN") || html.includes("Edit Screen Repair")}`);
     console.log(`       -> edit links point at /edit: ${html.includes("/edit")}`);
+    if (html.includes("Review orders") && html.includes("Recent orders")) {
+      console.log("  PASS admin dashboard surfaces orders");
+      pass++;
+    } else {
+      console.log("  FAIL admin dashboard missing orders overview");
+      fail++;
+    }
 
     // The header must expose the admin shortcut to admins.
     const adminHome = await (await fetch(`${BASE}/`, { headers: adminHeader })).text();
@@ -317,6 +330,27 @@ if (adminCookie) {
     body: badForm,
   });
   console.log(`       -> non-image rejected: ${badUpload.status === 422}`);
+
+  // Reject a wolf in sheep's clothing: text bytes claiming to be a PNG.
+  const spoofForm = new FormData();
+  spoofForm.append("kind", "products");
+  spoofForm.append(
+    "file",
+    new Blob(["<script>alert(1)</script>"], { type: "image/png" }),
+    "evil.png",
+  );
+  const spoofUpload = await fetch(`${BASE}/api/admin/upload`, {
+    method: "POST",
+    headers: adminHeader,
+    body: spoofForm,
+  });
+  if (spoofUpload.status === 422) {
+    console.log("  PASS spoofed image content rejected");
+    pass++;
+  } else {
+    console.log(`  FAIL spoofed image content accepted (${spoofUpload.status})`);
+    fail++;
+  }
 
   const categories = await (await fetch(`${BASE}/api/categories`)).json();
   const categoryId = categories?.data?.categories?.[0]?.id;
@@ -616,6 +650,72 @@ if (adminCookie) {
     }
   }
 
+  // ---- Admin orders --------------------------------------------------
+  // Staff must see what was placed and its condition, then move fulfilment
+  // forward. Uses the smoke product so stock is restored by cancellation.
+  let adminOrderId = null;
+  if (productId) {
+    const orderRes = await check("create order for admin fulfilment", "/api/orders", 201, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `smoke-order+${stamp}@kmrc.com.np`,
+        phone: "9841234567",
+        paymentMethod: "COD",
+        shippingAddress: {
+          contactName: "Smoke Order",
+          phone: "9841234567",
+          line1: "Tripura Marg 44",
+          city: "Kathmandu",
+          province: "Bagmati",
+        },
+        items: [{ productId, quantity: 1 }],
+      }),
+    });
+    const orderJson = orderRes ? await orderRes.json() : null;
+    adminOrderId = orderJson?.data?.order?.id ?? null;
+    const adminOrderNumber = orderJson?.data?.order?.orderNumber ?? "";
+    console.log(`       -> order id: ${adminOrderId ?? "none"}`);
+
+    await check("/admin/orders", "/admin/orders", 200, { headers: adminHeader });
+    if (adminOrderId) {
+      const listPage = await check(
+        "admin orders list renders",
+        `/admin/orders?q=${encodeURIComponent(adminOrderNumber)}`,
+        200,
+        { headers: adminHeader },
+      );
+      if (listPage) {
+        const html = await listPage.text();
+        console.log(`       -> order visible in list: ${html.includes(adminOrderNumber)}`);
+      }
+
+      await check("admin order detail renders", `/admin/orders/${adminOrderId}`, 200, {
+        headers: adminHeader,
+      });
+      await check("admin order rejects bad status", `/api/admin/orders/${adminOrderId}`, 422, {
+        method: "PATCH",
+        headers: { ...adminHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "FLYING" }),
+      });
+      await check("admin order moves to processing", `/api/admin/orders/${adminOrderId}`, 200, {
+        method: "PATCH",
+        headers: { ...adminHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PROCESSING", courierName: "Smoke Courier", trackingRef: `SMK-${stamp}` }),
+      });
+      await check("admin order cancels unpaid order", `/api/admin/orders/${adminOrderId}`, 200, {
+        method: "PATCH",
+        headers: { ...adminHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "CANCELLED" }),
+      });
+      await check("closed order cannot change", `/api/admin/orders/${adminOrderId}`, 409, {
+        method: "PATCH",
+        headers: { ...adminHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "PROCESSING" }),
+      });
+    }
+  }
+
   // Missing image is refused.
   await check(
     "product without image rejected",
@@ -680,6 +780,46 @@ if (adminCookie) {
         body: JSON.stringify({}),
       },
     );
+
+    // Customers cannot move order fulfilment through the admin endpoint, even
+    // for their own orders.
+    const catalog = ((await (await fetch(`${BASE}/api/products?limit=50`)).json())?.data?.products ?? []).filter(
+      (product) => product.stock > 1,
+    );
+    const customerProduct = catalog[0];
+    if (customerProduct) {
+      const ownOrderRes = await fetch(`${BASE}/api/orders`, {
+        method: "POST",
+        headers: { ...customerHeader, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          phone: "9841234567",
+          paymentMethod: "COD",
+          shippingAddress: {
+            contactName: "Smoke Test",
+            phone: "9841234567",
+            line1: "Tripura Marg 44",
+            city: "Kathmandu",
+            province: "Bagmati",
+          },
+          items: [{ productId: customerProduct.id, quantity: 1 }],
+        }),
+      });
+      const ownOrderJson = await ownOrderRes.json().catch(() => null);
+      const ownOrderId = ownOrderJson?.data?.order?.id;
+      if (ownOrderId) {
+        await check("customer blocked from admin orders", `/api/admin/orders/${ownOrderId}`, 403, {
+          method: "PATCH",
+          headers: { ...customerHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "PROCESSING" }),
+        });
+        await check("customer cancels own order", `/api/orders/${ownOrderId}`, 200, {
+          method: "PATCH",
+          headers: { ...customerHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "cancel" }),
+        });
+      }
+    }
   }
 }
 
@@ -751,9 +891,135 @@ console.log("\n── SECURITY: NO ROLE SELF-ESCALATION ────────
   }
 }
 
-console.log("\n── API: GATEWAYS REJECT WHEN UNCONFIGURED ─────────────");
-await post("esewa init", "/api/payments/esewa", { orderNumber: "KM-XXXXXX" }, 503);
-await post("khalti init", "/api/payments/khalti", { orderNumber: "KM-XXXXXX" }, 503);
+console.log("\n── API: ESEWA INIT (OFFICIAL UAT) ─────────────────────");
+await post("esewa init unknown order", "/api/payments/esewa", { orderNumber: "KM-NOPE00" }, 404);
+
+console.log("\n── API: PAYMENT INIT IS OWNER-SCOPED ──────────────────");
+{
+  // Ownership and quota are enforced before the configuration gate, so these
+  // hold whether or not gateway keys are present.
+  const products = ((await (await fetch(`${BASE}/api/products?limit=50`)).json())?.data?.products ?? []).filter((p) => p.stock > 1);
+  const product = products[0];
+  console.log(`       -> using product ${product?.slug ?? "(none)"}`);
+
+  const placeOrder = async (paymentMethod, auth) => {
+    const res = await fetch(`${BASE}/api/orders`, {
+      method: "POST",
+      headers: auth ? { ...auth, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email ?? "guest-payment@kmrc.com.np",
+        phone: "9841234567",
+        paymentMethod,
+        shippingAddress: {
+          contactName: "Payment Tester",
+          phone: "9841234567",
+          line1: "Tripura Marg 44",
+          city: "Kathmandu",
+          province: "Bagmati",
+        },
+        items: [{ productId: product.id, quantity: 1 }],
+      }),
+    });
+    return { status: res.status, json: await res.json().catch(() => null) };
+  };
+
+  const guestOrder = await placeOrder("ESEWA");
+  const guestOrderNumber = guestOrder.json?.data?.order?.orderNumber;
+
+  if (!guestOrderNumber) {
+    console.log(`       -> order failed (${guestOrder.json?.error ?? guestOrder.status})`);
+  } else {
+    console.log(`       -> guest esewa order: ${guestOrderNumber}`);
+
+    // TEST mode must produce a complete, self-consistent signed form — no
+    // merchant signup involved. Verify the signature independently.
+    const initRes = await fetch(`${BASE}/api/payments/esewa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderNumber: guestOrderNumber }),
+    });
+    const init = await initRes.json();
+    const { formUrl, fields } = init?.data ?? {};
+    const isUatForm = typeof formUrl === "string" && formUrl.includes("rc-epay.esewa.com.np");
+    const names = (fields?.signed_field_names ?? "").split(",");
+    const { createHmac } = await import("node:crypto");
+    // Key=value pairs in field order — the official format (verified against
+    // the documented test vector, not bare values).
+    const recomputed = createHmac("sha256", "8gBm/:&EnhH.1/q")
+      .update(names.map((n) => `${n}=${fields?.[n] ?? ""}`).join(","), "utf8")
+      .digest("base64");
+    const signatureOk = fields?.signature === recomputed;
+    const totalConsistent =
+      Number(fields?.total_amount) ===
+      Number(fields?.amount) + Number(fields?.product_delivery_charge);
+    console.log(`       -> UAT form URL: ${isUatForm} (${formUrl ?? "none"})`);
+    console.log(`       -> signature verifies independently: ${signatureOk}`);
+    console.log(`       -> total == amount + delivery: ${totalConsistent}`);
+    if (initRes.status === 200 && isUatForm && signatureOk && totalConsistent) {
+      console.log("  PASS esewa UAT form is signed and self-consistent");
+      pass++;
+    } else {
+      console.log("  FAIL esewa UAT form is broken");
+      fail++;
+    }
+
+    // Opening the success endpoint without paying must NEVER land on success.
+    // Depending on the status check (reachable UAT answers NOT_FOUND for a
+    // fabricated uuid; an unreachable one holds), the honest landing is the
+    // failure or the pending page.
+    const rawSuccess = await fetch(
+      `${BASE}/api/payments/esewa/success?order=${guestOrderNumber}`,
+      { redirect: "manual" },
+    );
+    const pendingLoc = rawSuccess.headers.get("location") ?? "";
+    console.log(`       -> raw success URL -> ${rawSuccess.status} ${pendingLoc}`);
+    const safeLanding =
+      pendingLoc.includes("/checkout/payment-pending") ||
+      pendingLoc.includes("/checkout/payment-failed");
+    if (safeLanding && !pendingLoc.includes("paid=1")) {
+      console.log("  PASS un-paid success URL can never land on success");
+      pass++;
+    } else {
+      console.log("  FAIL un-paid success URL landed unsafely");
+      fail++;
+    }
+  }
+
+  // An account-owned order must not be payable by a different session.
+  const owned = await placeOrder("COD", { Cookie: cookie.split(";")[0] });
+  const ownedNumber = owned.json?.data?.order?.orderNumber;
+  console.log(`       -> owned order: ${ownedNumber ?? owned.status}`);
+
+  if (ownedNumber) {
+    // The owner clears the ownership gate, so a wrong-method init is refused
+    // for the *method* mismatch rather than auth.
+    const ownerMismatch = await fetch(`${BASE}/api/payments/esewa`, {
+      method: "POST",
+      headers: { Cookie: cookie.split(";")[0], "Content-Type": "application/json" },
+      body: JSON.stringify({ orderNumber: ownedNumber }),
+    });
+    if (ownerMismatch.status === 400) {
+      console.log("  PASS esewa refused on a COD order (method mismatch)");
+      pass++;
+    } else {
+      console.log(`  FAIL ${ownerMismatch.status} esewa on COD order (expected 400)`);
+      fail++;
+    }
+    const anonEsewa = await post(
+      "anon cannot init esewa on owned order",
+      "/api/payments/esewa",
+      { orderNumber: ownedNumber },
+      401,
+    );
+    if (anonEsewa?.status === 401) {
+      console.log("  PASS 401 anonymous cannot start esewa on an owned order");
+      pass++;
+    } else {
+      console.log(`  FAIL ${anonEsewa?.status} expected 401`);
+      fail++;
+    }
+  }
+}
 
 console.log("\n── API: CONTACT + NEWSLETTER ───────────────────────────");
 await post("contact real", "/api/contact", {

@@ -21,6 +21,13 @@ function isSmtpConfigured() {
 
 async function deliver({ to, subject, text, html }: Mail) {
   if (!isSmtpConfigured()) {
+    // Reset links and order details must never reach production logs: without
+    // SMTP configured, a deployed server would print tokens where log
+    // aggregators can read them. Log only in development.
+    if (process.env.NODE_ENV === "production") {
+      console.error("[mail] SMTP not configured — message dropped (no token logged).");
+      return { sent: false, reason: "smtp_not_configured" as const };
+    }
     console.info(
       [
         "",

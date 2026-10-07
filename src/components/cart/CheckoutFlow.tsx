@@ -10,7 +10,6 @@ import {
   Truck,
   Banknote,
   Smartphone,
-  Wallet,
   ArrowRight,
   Lock,
   AlertTriangle,
@@ -26,8 +25,9 @@ import { EmptyState, Badge } from "@/components/ui/Primitives";
 import { Checkbox, Input, Radio, Select, Textarea } from "@/components/ui/Field";
 import { ProgressBar } from "@/components/motion/Telemetry";
 import { useToast } from "@/components/ui/Toast";
+import { startGatewayPayment } from "@/lib/payments/client";
 
-type PaymentMethod = "COD" | "ESEWA" | "KHALTI";
+type PaymentMethod = "COD" | "ESEWA";
 
 const PROVINCES = [
   "Bagmati",
@@ -69,14 +69,30 @@ type SavedAddress = {
   isDefault: boolean;
 };
 
+/**
+ * Turns an API error path into something a customer can act on. Paths without
+ * an inline field (`items.*`, `paymentMethod`, `couponCode`) would otherwise
+ * surface only as a bare schema message with nothing highlighted.
+ */
+function describeError(key: string, message: string) {
+  if (key === "items") {
+    return "Your cart is empty. Add a product before placing the order.";
+  }
+  if (/^items\.\d+\.quantity$/.test(key)) {
+    return "A cart quantity is no longer available — it may have sold out or sold down. Open your cart and adjust the quantity.";
+  }
+  return message;
+}
+
 export function CheckoutFlow({
   user,
   addresses,
-  paymentAvailability,
 }: {
   user: { name: string; email: string; phone: string | null } | null;
   addresses: SavedAddress[];
-  paymentAvailability: Record<PaymentMethod, boolean>;
+  // NOTE: there is deliberately no availability map. Payment methods are
+  // always offered; run-time readiness (TEST vs LIVE, keys present) is a
+  // backend concern and surfaces as a clear message, never a disabled button.
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -128,7 +144,7 @@ export function CheckoutFlow({
         paymentMethod: method,
         deliveryNote: String(data.deliveryNote ?? ""),
         saveAddress: data.saveAddress === "on",
-        couponCode: cart.couponCode,
+        couponCode: cart.couponCode ?? undefined,
         items: lines,
         shippingAddress: usingSaved
           ? {
@@ -178,36 +194,18 @@ export function CheckoutFlow({
         return;
       }
 
-      // Hand off to the gateway.
-      const initRes = await fetch(`/api/payments/${method.toLowerCase()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderNumber: order.orderNumber }),
-      });
-      const initJson = await initRes.json();
-
-      if (!initRes.ok || !initJson.ok) {
+      // Hand off to the gateway with the shared starter, so the checkout form and
+      // the failure page's Retry button take the exact same path.
+      const initError = await startGatewayPayment(method, order.orderNumber);
+      if (initError) {
         // The order exists but payment did not start — send them to the page
         // so they can retry or switch method rather than losing the order.
         router.push(
-          `/checkout/success?order=${order.orderNumber}&gateway=failed&reason=${encodeURIComponent(
-            initJson.error ?? "Payment could not be started",
-          )}`,
+          `/checkout/payment-failed?order=${order.orderNumber}&method=${method}&reason=${encodeURIComponent(initError)}`,
         );
         return;
       }
-
-      if (initJson.data.redirectUrl) {
-        window.location.href = initJson.data.redirectUrl;
-        return;
-      }
-
-      if (initJson.data.mode === "form") {
-        router.push(`/checkout/success?order=${order.orderNumber}&gateway=esewa-form`);
-        return;
-      }
-
-      router.push(`/checkout/success?order=${order.orderNumber}`);
+      return;
     } finally {
       setPending(false);
     }
@@ -237,6 +235,31 @@ export function CheckoutFlow({
 
   return (
     <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-gutter lg:grid-cols-12">
+      {/* ================= Error summary ================= */}
+      {/* The API returns precise paths, but several of them (items, paymentMethod,
+          couponCode) have no inline field to attach to. Without this the customer
+          saw only a generic toast with nothing highlighted and no idea what to fix. */}
+      {Object.keys(errors).length > 0 ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="lg:col-span-12 border border-error/40 bg-error-container/10 p-4"
+        >
+          <p className="flex items-center gap-2 font-label-tag text-label-tag uppercase tracking-widest text-error">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+            Order not placed — {Object.keys(errors).length === 1 ? "1 problem" : `${Object.keys(errors).length} problems`} to fix
+          </p>
+          <ul className="mt-2 flex flex-col gap-1 font-body-sm text-body-sm text-text-secondary">
+            {Object.entries(errors).map(([key, message]) => (
+              <li key={key} className="flex gap-2">
+                <span aria-hidden>·</span>
+                <span>{describeError(key, message)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* ================= Left ================= */}
       <div className="flex flex-col gap-gutter lg:col-span-7 xl:col-span-8">
         {/* ---- Contact ---- */}
@@ -470,7 +493,6 @@ export function CheckoutFlow({
               value="ESEWA"
               checked={method === "ESEWA"}
               onChange={() => setMethod("ESEWA")}
-              disabled={!paymentAvailability.ESEWA}
               label={
                 <span className="flex items-center gap-2">
                   <Smartphone className="h-4 w-4 text-tertiary" aria-hidden />
@@ -478,31 +500,10 @@ export function CheckoutFlow({
                 </span>
               }
             />
-
-            <Radio
-              name="paymentMethod"
-              value="KHALTI"
-              checked={method === "KHALTI"}
-              onChange={() => setMethod("KHALTI")}
-              disabled={!paymentAvailability.KHALTI}
-              label={
-                <span className="flex items-center gap-2">
-                  <Wallet className="h-4 w-4 text-tertiary" aria-hidden />
-                  Khalti
-                </span>
-              }
-            />
           </div>
 
-          {!paymentAvailability.ESEWA || !paymentAvailability.KHALTI ? (
-            <p className="flex items-start gap-2 border border-border-subtle bg-surface-deep p-3 font-body-sm text-[12px] text-text-muted">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-              Gateway payments appear once merchant keys are added to <code>.env</code>. Cash on
-              delivery is fully available now.
-            </p>
-          ) : null}
-
-          <AnimatePresence mode="wait">
+          {method !== "COD" ? (
+            <AnimatePresence mode="wait">
             <motion.div
               key={method}
               initial={{ opacity: 0, y: 6 }}
@@ -512,14 +513,11 @@ export function CheckoutFlow({
               className="border-l-2 border-border-active bg-surface-deep px-4 py-3"
             >
               <p className="font-body-md text-body-md text-text-secondary">
-                {method === "COD"
-                  ? "Pay the courier in cash when your order arrives. Please have the exact amount ready — our riders carry limited change."
-                  : method === "ESEWA"
-                    ? "You will be redirected to eSewa to complete payment securely. Your order is confirmed only once the payment goes through."
-                    : "You will be redirected to Khalti to complete payment securely. Your order is confirmed only once the payment goes through."}
+                You will be redirected to eSewa to complete payment securely. Your order is confirmed only once the payment goes through.
               </p>
             </motion.div>
           </AnimatePresence>
+          ) : null}
         </Panel>
       </div>
 

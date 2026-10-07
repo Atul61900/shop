@@ -1,75 +1,89 @@
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { siteConfig } from "@/lib/config";
-import { createEsewaPayment, isEsewaConfigured } from "@/lib/payments/esewa";
+import { buildEsewaForm } from "@/lib/payments/esewa";
+import { checkOrderOwnership, paymentInitQuota } from "@/lib/payments/ownership";
+import { logPayment } from "@/lib/payments/log";
 import { fail, guarded, ok, readJson } from "@/lib/api";
 
 /**
  * POST /api/payments/esewa
  * Body: { orderNumber: string }
  *
- * Starts an eSewa checkout for an existing pending order and returns the URL
- * the browser should be redirected to.
+ * Builds the SIGNED ePay v2 form fields server-side (HMAC stays on the Node
+ * backend) and hands them to React, which POSTs them straight to eSewa's form
+ * URL. `transaction_uuid` is minted per attempt (`<order>-<n>`) so a retry is
+ * a fresh gateway transaction that still traces to the same order.
  */
 export async function POST(request: Request) {
   return guarded(async () => {
-    if (!isEsewaConfigured()) {
-      return fail("eSewa is not configured on this deployment.", 503);
-    }
-
     const body = await readJson<{ orderNumber?: string }>(request);
     const orderNumber = body?.orderNumber?.trim();
     if (!orderNumber) return fail("Order number is required.");
 
     const order = await prisma.order.findUnique({ where: { orderNumber } });
     if (!order) return fail("Order not found.", 404);
+
+    // Ownership and quota run before anything else: an anonymous caller should
+    // learn they need to sign in, not whether a gateway is deployed.
+    const ownership = await checkOrderOwnership(order);
+    if (!ownership.ok) return fail(ownership.error, ownership.status);
+
+    if (!paymentInitQuota(order.id).allowed) {
+      return fail("Too many payment attempts. Please wait a few minutes.", 429);
+    }
+
     if (order.paymentStatus === "PAID") return fail("This order is already paid.");
     if (order.paymentMethod !== "ESEWA") {
       return fail("This order was not placed with eSewa.");
     }
 
-    const base = siteConfig.url;
-    const returnBase = `${base}/checkout/success`;
+    const attempt = (await prisma.payment.count({ where: { orderId: order.id, gateway: "ESEWA" } })) + 1;
+    const txnUuid = `${order.orderNumber}-${attempt}`;
 
-    const result = await createEsewaPayment({
+    const base = siteConfig.url.replace(/\/$/, "");
+    const result = buildEsewaForm({
       orderNumber: order.orderNumber,
+      txnUuid,
       amountMinor: order.total,
-      email: order.email,
-      phone: order.phone,
-      successUrl: `${returnBase}?order=${order.orderNumber}&gateway=esewa`,
-      failureUrl: `${base}/checkout?order=${order.orderNumber}&gateway=failed`,
-      callbackUrl: `${base}/api/payments/esewa/verify?order=${order.orderNumber}`,
+      // Shipping is the only surcharge this checkout knows; tax and service
+      // charge are zero, which keeps total = amount + delivery honest.
+      shippingMinor: order.shippingFee,
+      successUrl: `${base}/api/payments/esewa/success?order=${order.orderNumber}`,
+      failureUrl: `${base}/api/payments/esewa/failure?order=${order.orderNumber}`,
     });
 
-    if (!result.ok) return fail(result.error, 502);
+    if (!result.ok) {
+      const status = result.code === "config-missing" ? 503 : 502;
+      return fail(result.error, status, { gateway: "ESEWA" });
+    }
 
-    await prisma.payment.create({
+    const payment = await prisma.payment.create({
       data: {
         orderId: order.id,
         gateway: "ESEWA",
         amount: order.total,
+        currency: "NPR",
+        txnUuid,
         status: "INITIATED",
       },
+      select: { id: true },
     });
 
-    if (result.mode === "rest") {
-      return ok({ mode: "rest", redirectUrl: result.redirectUrl });
-    }
+    logPayment({
+      event: "initiate",
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      paymentId: payment.id,
+      gateway: "ESEWA",
+      txn: txnUuid,
+      expectedMinor: order.total,
+    });
 
-    // Legacy form-post: stash the fields so the checkout page can POST them.
-    const store = await cookies();
-    store.set(
-      "kmrc_esewa_form",
-      JSON.stringify(result.fields).slice(0, 3800),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 600,
-      },
-    );
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { paymentStatus: "PENDING" },
+    });
 
-    return ok({ mode: "form", formUrl: result.formUrl });
+    return ok({ mode: "esewa-form", formUrl: result.formUrl, fields: result.fields });
   });
 }

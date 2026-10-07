@@ -53,7 +53,9 @@ export async function PATCH(
         description: data.description || null,
         accent: data.accent,
         image: data.image || null,
-        sortOrder: data.sortOrder,
+        // Null means "not sent" here — fall through to no update rather than
+        // writing null into a required column.
+        sortOrder: data.sortOrder ?? undefined,
         isActive: data.isActive ?? true,
       },
       select: { id: true, slug: true, name: true },

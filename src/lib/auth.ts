@@ -61,6 +61,13 @@ export const getCurrentUser = cache(async () => {
   const token = store.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
+  // Sessions and single-use tokens would otherwise accumulate forever —
+  // there is no cron in this deployment, so each request rolls a small chance
+  // to sweep expired rows. Fire-and-forget: cleanup must never slow a request.
+  if (Math.random() < 0.02) {
+    purgeExpiredSessions().catch(() => undefined);
+  }
+
   const session = await prisma.session.findUnique({
     where: { token },
     include: {

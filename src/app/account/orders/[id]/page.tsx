@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { formatDateTime, formatMoney, humanize } from "@/lib/utils";
 import { ButtonLink } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Primitives";
+import { CancelOrderButton } from "@/components/order/CancelOrderButton";
 
 export const metadata: Metadata = {
   title: "Order Details",
@@ -86,6 +87,14 @@ export default async function OrderDetailPage({
             <span className="font-label-metric text-[26px] tabular-nums text-text-primary">
               {formatMoney(order.total)}
             </span>
+            {!cancelled && (
+              <CancelOrderButton
+                orderId={order.id}
+                orderNumber={order.orderNumber}
+                orderStatus={order.status}
+                paymentStatus={order.paymentStatus}
+              />
+            )}
           </div>
         </div>
 

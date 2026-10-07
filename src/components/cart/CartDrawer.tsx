@@ -12,11 +12,13 @@ import { useCartStore } from "@/store/cart";
 import { ButtonLink } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/Primitives";
 import { ProgressBar } from "@/components/motion/Telemetry";
+import { LineSkeleton } from "@/components/shop/Skeletons";
 
 export function CartDrawer() {
   const isOpen = useCartStore((s) => s.isDrawerOpen);
   const close = useCartStore((s) => s.closeDrawer);
   const cart = useCartStore((s) => s.cart);
+  const lines = useCartStore((s) => s.lines);
   const isPricing = useCartStore((s) => s.isPricing);
   const setQuantity = useCartStore((s) => s.setQuantity);
   const remove = useCartStore((s) => s.remove);
@@ -97,9 +99,11 @@ export function CartDrawer() {
               </div>
             ) : null}
 
-            {/* Lines */}
+            {/* Lines — empty is judged on local lines, not the priced cart,
+                which lags by a request. Otherwise a fresh load shows an
+                empty drawer that contradicts the header badge. */}
             <div className="flex-1 overflow-y-auto">
-              {cart.lines.length === 0 ? (
+              {lines.length === 0 ? (
                 <div className="p-5">
                   <EmptyState
                     icon={<ShoppingBag className="h-6 w-6" aria-hidden />}
@@ -180,7 +184,11 @@ export function CartDrawer() {
                                 >
                                   {line.quantity === 1 ? (
                                     <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                                  ) : (
+              ) : cart.lines.length === 0 ? (
+                <div className="p-5">
+                  <LineSkeleton rows={Math.min(lines.length, 4)} />
+                </div>
+              ) : (
                                     <Minus className="h-3.5 w-3.5" aria-hidden />
                                   )}
                                 </button>
@@ -261,8 +269,8 @@ export function CartDrawer() {
                   </ButtonLink>
                 </div>
 
-                <p className="mt-4 text-center font-body-sm text-[12px] text-text-muted">
-                  Cash on delivery, eSewa &amp; Khalti accepted
+<p className="mt-4 text-center font-body-sm text-[12px] text-text-muted">
+                  Cash on delivery & eSewa accepted
                 </p>
               </div>
             ) : null}

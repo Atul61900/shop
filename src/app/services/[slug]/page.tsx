@@ -7,6 +7,7 @@ import type { Route } from "next";
 
 import { prisma } from "@/lib/prisma";
 import { serializeService } from "@/lib/services";
+import { jsonLdScript } from "@/lib/seo";
 import { ButtonLink } from "@/components/ui/Button";
 import { Badge, SectionEyebrow } from "@/components/ui/Primitives";
 import { Reveal } from "@/components/motion/Reveal";
@@ -87,7 +88,7 @@ export default async function ServiceDetailPage({
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
 
       <div className="mx-auto max-w-7xl px-margin-mobile py-8 lg:px-margin lg:py-12">

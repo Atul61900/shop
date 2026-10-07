@@ -222,30 +222,51 @@ export function Checkbox({ label, className, ...props }: CheckboxProps) {
 export function Radio({
   label,
   className,
+  hint,
+  disabled,
   ...props
 }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "className" | "type"> & {
   label: React.ReactNode;
   className?: string;
+  /** Explains why an option is unavailable, e.g. a missing merchant key. */
+  hint?: React.ReactNode;
 }) {
   return (
     <label
       className={cn(
-        "group flex cursor-pointer items-start gap-3 p-4 bg-surface-deep border border-border-subtle transition-all hover:border-border-active has-checked:border-border-active has-checked:bg-surface-card-hover",
+        "group flex items-start gap-3 border p-4 transition-all",
+        disabled
+          ? // A disabled option must look disabled, otherwise it reads as
+            // broken when it is simply not configured yet.
+            "cursor-not-allowed border-border-subtle/60 bg-surface-deep/40 opacity-50"
+          : "cursor-pointer border-border-subtle bg-surface-deep hover:border-border-strong hover:border-border-active has-checked:border-border-active has-checked:bg-surface-card-hover",
         className,
       )}
     >
       <span className="relative mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
         <input
           type="radio"
-          className="peer h-4 w-4 shrink-0 cursor-pointer appearance-none border border-border-strong bg-surface-base transition-all checked:border-border-active"
+          disabled={disabled}
+          className={cn(
+            "peer h-4 w-4 shrink-0 appearance-none border border-border-strong bg-surface-base transition-all checked:border-border-active",
+            disabled ? "cursor-not-allowed" : "cursor-pointer",
+          )}
           {...props}
         />
         <span className="pointer-events-none absolute h-2 w-2 scale-0 bg-primary-container transition-transform peer-checked:scale-100" />
       </span>
       <span className="flex flex-col gap-1">
-        <span className="font-label-button text-label-button uppercase tracking-wider text-text-primary">
+        <span
+          className={cn(
+            "font-label-button text-label-button uppercase tracking-wider",
+            disabled ? "text-text-muted" : "text-text-primary",
+          )}
+        >
           {label}
         </span>
+        {hint ? (
+          <span className="font-body-sm text-[12px] text-text-muted">{hint}</span>
+        ) : null}
       </span>
     </label>
   );

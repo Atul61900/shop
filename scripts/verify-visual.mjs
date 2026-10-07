@@ -89,7 +89,12 @@ console.log("\n── CATALOGUE: EVERY STORED IMAGE RESOLVES ──────�
 
   for (const service of services) {
     const html = await (await fetch(`${BASE}/services/${service.slug}`)).text();
-    assert(`service page renders ${service.slug}`, html.includes(service.name));
+    // React escapes text content (& -> &amp; etc.), so match the escaped form.
+    const escaped = service.name
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    assert(`service page renders ${service.slug}`, html.includes(service.name) || html.includes(escaped));
     if (service.image) {
       assert(`${service.slug} uses its image`, markupHas(html, service.image));
       const r = await fetch(`${BASE}${service.image}`);
@@ -100,6 +105,31 @@ console.log("\n── CATALOGUE: EVERY STORED IMAGE RESOLVES ──────�
       );
     }
   }
+}
+
+console.log("\n── FOOTER: MATRIX MATCHES THE CATALOGUE ──────────────");
+// The footer reads services from the database, so every link it renders must
+// resolve. A hardcoded list previously kept pointing at deleted services.
+{
+  const { html: homeHtml } = { html: (await (await fetch(`${BASE}/`)).text()) };
+  const listed = [...homeHtml.matchAll(/\/services\/([a-z0-9-]+)/g)].map((m) => m[1]);
+  const unique = [...new Set(listed)];
+  assert("footer lists services", unique.length > 0, `${unique.length} links`);
+
+  for (const slug of unique) {
+    const res = await fetch(`${BASE}/services/${slug}`, { redirect: "manual" });
+    assert(`footer link /services/${slug} resolves`, res.status === 200, `${res.status}`);
+  }
+
+  // And nothing hardcoded remains.
+  const payload = JSON.parse(await (await fetch(`${BASE}/api/services`)).text());
+  const active = (payload?.data?.services ?? []).map((s) => s.slug);
+  const missing = active.filter((slug) => !unique.includes(slug));
+  assert(
+    "every active service is in the footer",
+    missing.length === 0,
+    missing.join(", "),
+  );
 }
 
 console.log("\n── CONTRAST: NO LIGHT-ON-LIGHT ERROR TEXT ────────────");
@@ -123,7 +153,18 @@ for (const path of ["/login", "/register"]) {
   assert(`${path} password field present`, html.includes('name="password"'));
 }
 
-console.log("\n── CONTACT: EXACT MAP PIN ───────────────────────────");
+console.log("\n── CHECKOUT: METHODS SELECTABLE + TEST BADGE ─────────");
+{
+  const { html } = await page("/checkout");
+  // Methods must never be disabled for missing keys.
+  const disabledRadios = (html.match(/<input[^>]*type="radio"[^>]*disabled/g) || []).length;
+  assert("no disabled payment method", disabledRadios === 0, `${disabledRadios} disabled`);
+  assert("esewa offered", html.includes("eSewa"));
+  assert("TEST MODE badge shown", html.includes("Test mode"));
+  assert("dev hint gone", !html.includes("Merchant key not configured"));
+}
+
+console.log("\n── PAYMENT PAGES RENDER ───────────────────────────────");
 const contactHtml = await (await fetch(`${BASE}/contact`)).text();
 assert("map pins exact storefront", contactHtml.includes("Krishna%20Mobile%20Repairing%20Center"));
 assert("map uses street-level zoom", contactHtml.includes("z=17"));

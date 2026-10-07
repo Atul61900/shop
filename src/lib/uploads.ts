@@ -27,6 +27,45 @@ const ALLOWED_TYPES = new Map<string, string>([
   ["image/webp", "webp"],
 ]);
 
+/**
+ * Sniffs the actual image format from magic bytes. The browser-supplied MIME
+ * type is just a claim — a script renamed to `.png` must not pass validation.
+ * Returns the detected MIME type, or null when the bytes match nothing known.
+ */
+export function sniffImageType(buffer: Buffer): string | null {
+  if (buffer.length < 3) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && // R
+    buffer[1] === 0x49 && // I
+    buffer[2] === 0x46 && // F
+    buffer[3] === 0x46 && // F
+    buffer[8] === 0x57 && // W
+    buffer[9] === 0x45 && // E
+    buffer[10] === 0x42 && // B
+    buffer[11] === 0x50 // P
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
 /** Public URL prefix for a kind — also what the Zod schemas allow. */
 export function uploadPrefix(kind: UploadKind) {
   return `/uploads/${kind}/`;
@@ -58,6 +97,14 @@ export async function saveImage(file: File, kind: UploadKind): Promise<string> {
   const checked = checkImageFile(file);
   if (!checked.ok) throw new UploadError(checked.message);
 
+  const bytes = Buffer.from(await file.arrayBuffer());
+
+  // The bytes must BE the claimed format, not merely claim to be it.
+  const sniffed = sniffImageType(bytes);
+  if (!sniffed || ALLOWED_TYPES.get(sniffed) !== checked.ext) {
+    throw new UploadError("That file is not a valid image.");
+  }
+
   const dir = dirFor(kind);
   const filename = `${crypto.randomUUID()}.${checked.ext}`;
   const absolute = path.join(dir, filename);
@@ -68,7 +115,7 @@ export async function saveImage(file: File, kind: UploadKind): Promise<string> {
   }
 
   await mkdir(dir, { recursive: true });
-  await writeFile(absolute, Buffer.from(await file.arrayBuffer()));
+  await writeFile(absolute, bytes);
 
   return `${uploadPrefix(kind)}${filename}`;
 }

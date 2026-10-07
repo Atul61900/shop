@@ -34,7 +34,7 @@ export default function TermsPage() {
 
         <Section title="Payment">
           <p>
-            Cash on delivery is available nationwide. For online payment we use eSewa and Khalti —
+            Cash on delivery is available nationwide. For online payment we use eSewa —
             we never receive or store your card details. An order is treated as paid only once the
             gateway confirms it, not when you are redirected back to this site.
           </p>

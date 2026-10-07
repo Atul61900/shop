@@ -13,7 +13,7 @@ electric-blue telemetry accents, Space Grotesk + Inter, sharp 0px geometry).
 | Styling | Tailwind CSS v4 (`@theme` tokens in `src/app/globals.css`) |
 | Database | Prisma 7 — **SQLite** locally, Postgres-ready for production |
 | Auth | httpOnly session cookies (bcrypt + `crypto.randomUUID`) |
-| Payments | Cash on Delivery + **eSewa** + **Khalti** (sandbox-first) |
+| Payments | Cash on Delivery + **eSewa** (sandbox-first) |
 | Motion | `motion` (scroll reveals, counters, telemetry traces, drawers) |
 | Email | SMTP via nodemailer (logs to console when unconfigured) |
 
@@ -165,29 +165,58 @@ changes appear not to take effect.
 Deleting a product or service through the API also removes its uploaded file;
 order history is unaffected because line items snapshot name and price.
 
-> Prices on the live site are shown in USD but the gateways (eSewa/Khalti/COD) settle
+> Prices on the live site are shown in USD but the gateway (eSewa/COD) settles
 > in NPR, so the seed uses realistic NPR equivalents. Update them to your real counter
 > prices before launching.
 
 ## Going live — the checklist
 
-1. **Payments.** Add keys to `.env` and the corresponding option appears at checkout
-   automatically (unconfigured gateways are hidden, never broken):
-   - `ESEWA_ENV=sandbox|production`, `ESEWA_MERCHANT_ID`, `ESEWA_SECRET_KEY`
-   - `KHALTI_ENV=sandbox|production`, `KHALTI_SECRET_KEY`
-   - Test with sandbox keys first; both verify server-side before marking paid.
-2. **Email.** Set `SMTP_HOST/PORT/USER/PASS/FROM` for password resets and order mail.
-   Without it, messages are logged to the server console (dev-friendly default).
-3. **Database → Postgres.** In `prisma/schema.prisma` change
-   `provider = "sqlite"` to `"postgresql"`, set `DATABASE_URL` to your instance
+1. **Payments.** The gateway is fully implemented — checkout UI, order
+   creation, redirect, and server-side settlement. Beginner-friendly guide:
+   `PAYMENTS_SETUP.md`. The short version:
+
+   - Everything runs in TEST/UAT by default (`PAYMENT_ENV=test`, the default).
+     Payment methods are always selectable; readiness is enforced at payment
+     time with a clear error, never a disabled button.
+   - eSewa UAT needs nothing: product code `EPAYTEST` and the official secret
+     ship as defaults. Test as `9711111111` / `Test@123` (token `123456`).
+   - Going live: fill `ESEWA_LIVE_PRODUCT_CODE`, `ESEWA_LIVE_SECRET_KEY`, set
+     `PAYMENT_ENV=live`, restart, and run one small real transaction.
+
+   How money is protected:
+   - **eSewa** redirects the browser back *and* sends a server-to-server
+     callback. The order is marked paid only after an independent verification
+     call with eSewa, so a forged hit on the callback URL cannot mark it paid.
+   - Starting a checkout is ownership-scoped: an order belonging to an account
+     can only be paid by that account's session (guest orders use the order
+     number as a capability token), and each order gets a small attempt quota.
+ 2. **Email.** Set `SMTP_HOST/PORT/USER/PASS/FROM` for password resets and order mail.
+    Without SMTP, development logs messages to the console; in production the
+    content is deliberately NOT logged (reset tokens must never reach log files).
+ 3. **Database → Postgres.** In `prisma/schema.prisma` change
+    `provider = "sqlite"` to `"postgresql"`, set `DATABASE_URL` to your instance
    (Neon/Supabase/RDS…), then `npx prisma migrate deploy`. No schema changes needed —
    every column is portable, and `src/lib/prisma.ts` picks the right driver adapter
    from the URL automatically.
-4. **Delete the demo user** and re-seed or wipe test orders/tickets.
-5. **Set real prices/stock** for all 8 products.
-6. Set `NEXT_PUBLIC_SITE_URL` to your domain (used by sitemap, metadata, payment
-   return URLs) and `AUTH_SECRET` to a long random string.
-7. Run the three test scripts against the production build before DNS cutover.
+ 4. **Delete the demo user** and re-seed or wipe test orders/tickets.
+ 5. **Set real prices/stock** for all 8 products.
+ 6. Set `NEXT_PUBLIC_SITE_URL` to your domain (used by sitemap, metadata, payment
+    return URLs).
+ 7. Run the three test scripts against the production build before DNS cutover.
+ 8. **Hosting shape.** This app writes to two places at runtime: the database
+    file and `public/uploads/`. Both must live on persistent, writable storage:
+    - **VPS / Docker / Coolify / Railway-volume:** works as-is. Mount a volume
+      for the project directory (or at least `dev.db` + `public/uploads`), back
+      both up nightly.
+    - **Vercel / serverless:** the filesystem is read-only and ephemeral, so
+      SQLite and local uploads will NOT work. You must switch to Postgres
+      (step 3) and move uploads to object storage (S3/R2 — only
+      `src/lib/uploads.ts` plus the avatar call sites need changing).
+ 9. **HTTPS only.** Sessions use `Secure` cookies in production automatically,
+    but the host must terminate TLS — the app itself serves plain HTTP behind
+    your reverse proxy / platform.
+ 10. **Rate limits are in-process memory** (`src/lib/api.ts`). Correct for one
+    server instance; if you run more than one, move them to Redis/Upstash.
 
 ## How the backend is organized
 
@@ -201,7 +230,6 @@ src/app/api/
   orders/…          checkout w/ atomic stock decrement + coupon use
   payments/
     esewa[/verify]  REST init · legacy form fallback · server-to-server verify
-    khalti[/verify] token init · HMAC-signed return · amount reconciliation
   reviews           post + live rating aggregates
   contact           honeypot + rate-limited inbox
   newsletter        idempotent subscribe

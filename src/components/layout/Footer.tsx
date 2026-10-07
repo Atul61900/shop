@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 
 import {
   FOOTER_COMPANY_LINKS,
   FOOTER_LEGAL_LINKS,
-  FOOTER_SERVICE_LINKS,
   siteConfig,
 } from "@/lib/config";
 import { NewsletterForm } from "./NewsletterForm";
@@ -54,7 +54,12 @@ const SOCIAL_ICONS = [
   { label: "TikTok", href: siteConfig.socials[2].href, Glyph: TiktokGlyph },
 ];
 
-export function Footer() {
+export function Footer({
+  serviceLinks,
+}: {
+  /** Live service matrix, read from the database by the root layout. */
+  serviceLinks: { href: string; label: string; index: string }[];
+}) {
   const year = new Date().getFullYear();
 
   return (
@@ -112,19 +117,21 @@ export function Footer() {
               Services Matrix
             </span>
             <ul className="flex flex-col gap-2 font-body-sm text-body-sm text-on-surface-variant">
-              {FOOTER_SERVICE_LINKS.map((link) => (
-                <li key={link.href}>
-                  <a
-                    href={link.href}
-                    className="group flex items-center justify-between transition-colors hover:text-text-primary"
-                  >
-                    <span>{link.label}</span>
-                    <span className="font-label-tag text-label-tag text-text-muted transition-colors group-hover:text-border-active">
-                      {link.index}
-                    </span>
-                  </a>
-                </li>
-              ))}
+{serviceLinks.length > 0
+              ? serviceLinks.map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href as Route}
+                      className="group flex items-center justify-between transition-colors hover:text-text-primary"
+                    >
+                      <span>{link.label}</span>
+                      <span className="font-label-tag text-label-tag text-text-muted transition-colors group-hover:text-border-active">
+                        {link.index}
+                      </span>
+                    </Link>
+                  </li>
+                ))
+              : null}
             </ul>
           </nav>
 

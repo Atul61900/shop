@@ -6,6 +6,7 @@ import type { Route } from "next";
 
 import { prisma } from "@/lib/prisma";
 import { serializeProduct } from "@/lib/cart";
+import { jsonLdScript } from "@/lib/seo";
 import { ProductDetail } from "@/components/shop/ProductDetail";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { ButtonLink } from "@/components/ui/Button";
@@ -129,7 +130,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
       <script
         type="application/ld+json"
         // Structured data for rich results.
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
 
       <div className="mx-auto max-w-7xl px-margin-mobile py-8 lg:px-margin lg:py-12">

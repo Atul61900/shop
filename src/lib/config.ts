@@ -98,15 +98,6 @@ export const NAV_LINKS = [
   { href: "/contact", label: "Contact" },
 ] as const;
 
-export const FOOTER_SERVICE_LINKS = [
-  { href: "/services/screen-repair", label: "Optical Display Alignment", index: "01" },
-  { href: "/services/battery-replacement", label: "Power Management IC", index: "02" },
-  { href: "/services/charging-port-repair", label: "Charging Port Soldering", index: "03" },
-  { href: "/services/motherboard-repair", label: "Micro-BGA Reballing", index: "04" },
-  { href: "/services/water-damage-recovery", label: "Liquid Ingress Recovery", index: "05" },
-  { href: "/services/software-diagnostics", label: "Software & OS Restore", index: "06" },
-] as const;
-
 export const FOOTER_COMPANY_LINKS = [
   { href: "/about", label: "Our Service Center" },
   { href: "/contact", label: "Contact" },

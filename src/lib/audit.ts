@@ -21,6 +21,7 @@ export async function recordAdminAction(input: {
     | "CATEGORY_CREATED"
     | "CATEGORY_UPDATED"
     | "CATEGORY_DELETED"
+    | "ORDER_UPDATED"
     | "IMAGE_UPLOADED";
   target: string;
   detail?: string;

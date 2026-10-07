@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { LegalLayout } from "@/components/shared/Legal";
+import { jsonLdScript } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Frequently Asked Questions",
@@ -64,11 +65,11 @@ const GROUPS = [
     items: [
       {
         q: "Which payment methods do you accept?",
-        a: "Cash on delivery is always available. eSewa and Khalti appear at checkout once the corresponding merchant keys are configured.",
+        a: "Cash on delivery is always available. eSewa appears at checkout once the merchant keys are configured.",
       },
       {
         q: "Are card payments accepted?",
-        a: "Not through this website. We do not store card details — eSewa and Khalti handle all online payment security.",
+        a: "Not through this website. We do not store card details — eSewa handles all online payment security.",
       },
       {
         q: "Can I pay by bank transfer?",
@@ -113,7 +114,7 @@ export default async function FaqPage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
       <LegalLayout
         eyebrow="Support"

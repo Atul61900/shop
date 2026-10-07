@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sniffImageType } from "@/lib/uploads";
 import { clientIp, fail, guarded, ok, rateLimit } from "@/lib/api";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB — the crop step outputs ~100 KB
@@ -66,8 +67,18 @@ export async function POST(request: Request) {
       return fail("Invalid upload.", 400);
     }
 
+    const bytes = Buffer.from(await file.arrayBuffer());
+
+    // The bytes must BE the claimed image format, not merely claim to be it.
+    const sniffed = sniffImageType(bytes);
+    if (!sniffed || ALLOWED.get(sniffed) !== ext) {
+      return fail("That file is not a valid image.", 422, {
+        file: "File contents do not match its type",
+      });
+    }
+
     await mkdir(UPLOAD_DIR, { recursive: true });
-    await writeFile(absolute, Buffer.from(await file.arrayBuffer()));
+    await writeFile(absolute, bytes);
 
     const previous = await prisma.user.findUnique({
       where: { id: user.id },
@@ -94,6 +105,11 @@ export async function DELETE() {
   return guarded(async () => {
     const user = await getCurrentUser();
     if (!user) return fail("You must be signed in.", 401);
+
+    const limit = rateLimit(`avatar-delete:${user.id}`, 10, 60 * 60 * 1000);
+    if (!limit.allowed) {
+      return fail("Too many requests. Please try again later.", 429);
+    }
 
     const current = await prisma.user.findUnique({
       where: { id: user.id },

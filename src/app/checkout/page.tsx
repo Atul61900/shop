@@ -3,14 +3,14 @@ import { Suspense } from "react";
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
-import { isEsewaConfigured } from "@/lib/payments/esewa";
-import { isKhaltiConfigured } from "@/lib/payments/khalti";
+import { FlaskConical } from "lucide-react";
+import { isTestMode } from "@/lib/payments/config";
 import { SectionEyebrow } from "@/components/ui/Primitives";
 import { CheckoutFlow } from "@/components/cart/CheckoutFlow";
 
 export const metadata: Metadata = {
   title: "Checkout",
-  description: "Complete your order with cash on delivery, eSewa or Khalti.",
+  description: "Complete your order with cash on delivery or eSewa.",
   robots: { index: false, follow: false },
 };
 
@@ -39,6 +39,12 @@ export default async function CheckoutPage() {
             Stock is re-verified the moment you place the order, so nothing sells out from under you
             while you type.
           </p>
+          {isTestMode() ? (
+            <p className="mt-5 inline-flex items-center gap-2 border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 font-label-tag text-label-tag uppercase tracking-widest text-amber-300">
+              <FlaskConical className="h-3.5 w-3.5" aria-hidden />
+              🧪 Test mode — no real money moves
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -48,11 +54,6 @@ export default async function CheckoutPage() {
             <CheckoutFlow
               user={user ? { name: user.name, email: user.email, phone: user.phone } : null}
               addresses={addresses}
-              paymentAvailability={{
-                COD: true,
-                ESEWA: isEsewaConfigured(),
-                KHALTI: isKhaltiConfigured(),
-              }}
             />
           </Suspense>
         </div>

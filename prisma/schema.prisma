@@ -225,7 +225,7 @@ model Order {
   email         String
   phone         String
   status        String    @default("PENDING") // PENDING|CONFIRMED|PROCESSING|READY|OUT_FOR_DELIVERY|DELIVERED|CANCELLED|REFUNDED
-  paymentMethod String    @default("COD") // COD|ESEWA|KHALTI
+  paymentMethod String    @default("COD") // COD|ESEWA
   paymentStatus String    @default("PENDING") // PENDING|PAID|FAILED|REFUNDED
   paymentRef    String?
   subtotal      Int
@@ -276,18 +276,26 @@ model Payment {
   id          String   @id @default(cuid())
   orderId     String
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  gateway     String // ESEWA | KHALTI
+  gateway     String // ESEWA
   amount      Int
-  /// Gateway transaction identifier
+  /// Our idempotency key sent to the gateway (eSewa transaction_uuid,
+  /// Khalti purchase_order_id). Retries mint a new one; repeats reuse it.
+  txnUuid     String?
+  /// Gateway transaction identifier, filled only after verification.
   reference   String?
-  status      String   @default("INITIATED") // INITIATED|SUCCESS|FAILED
+  /// ISO-4217 code; always NPR on this deployment.
+  currency    String   @default("NPR")
+  status      String   @default("INITIATED") // INITIATED|PENDING|SUCCESS|FAILED|CANCELLED|REFUNDED
   /// Raw gateway payload for audit
   rawResponse String   @default("{}")
   createdAt   DateTime @default(now())
   verifiedAt  DateTime?
+  /// First moment the payment was confirmed paid. Never rewritten.
+  paidAt      DateTime?
 
   @@index([orderId])
   @@index([reference])
+  @@index([txnUuid])
 }
 
 model Coupon {

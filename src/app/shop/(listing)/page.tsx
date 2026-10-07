@@ -11,7 +11,7 @@ import { ProductCard } from "@/components/shop/ProductCard";
 export const metadata: Metadata = {
   title: "Shop Accessories & Repair Tools",
   description:
-    "Buy genuine chargers, cases, cables, screen protection and repair tools from Krishna Mobile Repairing Center, Kathmandu. COD, eSewa and Khalti accepted.",
+    "Buy genuine chargers, cases, cables, screen protection and repair tools from Krishna Mobile Repairing Center, Kathmandu. COD & eSewa accepted.",
   alternates: { canonical: "/shop" },
 };
 

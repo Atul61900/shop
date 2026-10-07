@@ -6,6 +6,7 @@ import type { Route } from "next";
 
 import { prisma } from "@/lib/prisma";
 import { serializeService } from "@/lib/services";
+import { jsonLdScript } from "@/lib/seo";
 import { siteConfig } from "@/lib/config";
 import { ButtonLink } from "@/components/ui/Button";
 import { Badge, SectionEyebrow } from "@/components/ui/Primitives";
@@ -72,7 +73,7 @@ export default async function ServicesPage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdScript(jsonLd) }}
       />
 
       {/* ---- Hero ---- */}

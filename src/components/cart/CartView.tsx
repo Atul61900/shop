@@ -58,6 +58,9 @@ export function CartView() {
     return <LineSkeleton rows={4} />;
   }
 
+  // The list below renders priced rows, but pricing lags the local lines by a
+  // request. Show a skeleton while prices are in flight rather than an empty
+  // list that contradicts the header badge.
   if (lines.length === 0) {
     return (
       <EmptyState
@@ -74,6 +77,10 @@ export function CartView() {
         }
       />
     );
+  }
+
+  if (cart.lines.length === 0) {
+    return <LineSkeleton rows={Math.min(lines.length + 1, 5)} />;
   }
 
   return (
@@ -332,8 +339,8 @@ export function CartView() {
             >
               Proceed to checkout
             </ButtonLink>
-            <p className="text-center font-body-sm text-[12px] text-text-muted">
-              Cash on delivery, eSewa &amp; Khalti accepted
+<p className="text-center font-body-sm text-[12px] text-text-muted">
+              Cash on delivery & eSewa accepted
             </p>
           </div>
         </div>

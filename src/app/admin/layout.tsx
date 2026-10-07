@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Route } from "next";
-import { LayoutDashboard, Package, Wrench, FolderTree } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Wrench, FolderTree } from "lucide-react";
 
 import { requireAdmin } from "@/lib/auth";
 
@@ -12,6 +12,7 @@ export const metadata: Metadata = {
 
 const NAV = [
   { href: "/admin", label: "Overview", Icon: LayoutDashboard },
+  { href: "/admin/orders", label: "Orders", Icon: ShoppingBag },
   { href: "/admin/products/new", label: "Add product", Icon: Package },
   { href: "/admin/services/new", label: "Add service", Icon: Wrench },
   { href: "/admin/categories", label: "Categories", Icon: FolderTree },
